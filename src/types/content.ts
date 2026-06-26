@@ -1,6 +1,6 @@
 import type { IconName } from "../components/common/icons";
 
-export type StepType =
+type StepType =
   | "read"
   | "multiple_choice"
   | "multi_choice"
@@ -562,7 +562,7 @@ export type FeedbackResult =
   | { correct: false; message: string; showHint: boolean; hint?: string };
 
 /** Which learner statistic a milestone tracks, used to compute progress. */
-export type MilestoneMetric =
+type MilestoneMetric =
   | "lessons"
   | "streak"
   | "course"

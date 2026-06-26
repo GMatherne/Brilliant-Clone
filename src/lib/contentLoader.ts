@@ -152,14 +152,6 @@ export function getReviewBank(
   return reviewableLessons(progress).flatMap((l) => getPracticeBank(l.id));
 }
 
-/** A random cross-lesson set of questions for a mixed-review session. */
-export function getReviewSession(
-  progress: Record<string, { status: string }>,
-  size: number = REVIEW_SESSION_SIZE,
-): Step[] {
-  return sampleSession(getReviewBank(progress), size);
-}
-
 /** Whether the learner has covered enough material to run a mixed review. */
 export function canReview(
   progress: Record<string, { status: string }>,

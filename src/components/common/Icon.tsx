@@ -2,7 +2,6 @@ import type { ComponentPropsWithoutRef } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ICON_REGISTRY, type IconName } from "./icons";
 
-export { ICON_REGISTRY };
 export type { IconName };
 
 interface IconProps extends ComponentPropsWithoutRef<LucideIcon> {

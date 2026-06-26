@@ -22,7 +22,7 @@ import type { AnswerSpec, ContentBlock, Step } from "../types/content";
 // (rather than the floating `gemini-flash-latest` alias) gives steadier capacity
 // and more predictable behavior; swap to `gemini-2.5-flash-lite` for lower
 // latency/cost or `gemini-flash-latest` to always track the newest flash.
-export const TUTOR_MODEL = "gemini-2.5-flash";
+const TUTOR_MODEL = "gemini-2.5-flash";
 
 /** Maximum follow-up questions allowed per step, to cap cost and keep focus. */
 export const MAX_FOLLOWUPS = 5;
