@@ -330,7 +330,7 @@
             { "prompt": "$x^4$", "match": "$4x^3$" },
             { "prompt": "$x^5$", "match": "$5x^4$" }
           ],
-          "distractors": ["$x^4$"]
+          "distractors": ["$x^4$", "$5x^5$", "$4x^4$", "$3x^3$", "$2x^2$", "$3x^4$", "$2x^3$", "$4x^5$"]
         }
       },
       "feedback": {
@@ -407,7 +407,7 @@
       "type": "match",
       "conceptTag": "power_rule",
       "content": [
-        { "type": "text", "body": "Match each function to its derivative's value at x = 1, that is f'(1)." }
+        { "type": "text", "body": "Match each function to its derivative's value at x = 1." }
       ],
       "interaction": {
         "answer": {
@@ -418,7 +418,7 @@
             { "prompt": "$x^5$", "match": "5" },
             { "prompt": "$3x^2$", "match": "6" }
           ],
-          "distractors": ["2"]
+          "distractors": ["2", "7", "8", "9", "10", "12"]
         }
       },
       "feedback": {
@@ -432,7 +432,7 @@
       "type": "slider_graph",
       "conceptTag": "power_rule",
       "content": [
-        { "type": "text", "body": "For f(x) = x³, the power rule gives f'(x) = 3x². Tap the point with positive x where the tangent slope equals 12." }
+        { "type": "text", "body": "Given f(x) = x³, tap a point where the tangent slope equals 12." }
       ],
       "interaction": {
         "graph": {
@@ -442,12 +442,12 @@
           "yLabel": "f",
           "pointChoices": [-2, -1, 0, 1, 2]
         },
-        "answer": { "type": "graph_point", "x": 2, "tolerance": 0.25 }
+        "answer": { "type": "graph_point", "x": 2, "acceptX": [-2], "tolerance": 0.25 }
       },
       "feedback": {
-        "correct": "Exactly — 3x² = 12 gives x² = 4, so x = ±2; the positive point is x = 2, where the tangent climbs with slope 12.",
-        "incorrect": "Set the slope formula equal to 12: 3x² = 12. Solve for the positive x, then tap that point.",
-        "hint": "3x² = 12 → x² = 4 → x = 2 (the positive root)."
+        "correct": "Exactly — 3x² = 12 gives x² = 4, so x = ±2. Both x = 2 and x = -2 have a tangent slope of 12.",
+        "incorrect": "Apply the power rule and set the derivative equal to 12: 3x² = 12. Solve for x — there are two solutions — then tap one of those points.",
+        "hint": "3x² = 12 → x² = 4 → x = ±2. Either point works."
       }
     }
   ]

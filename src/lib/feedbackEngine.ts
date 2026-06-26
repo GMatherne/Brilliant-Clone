@@ -126,7 +126,12 @@ export function checkAnswer(
         };
       }
       const tolerance = spec.tolerance ?? 0.25;
-      const verified = math.abs(math.subtract(num, spec.x)) <= tolerance;
+      // Several points can satisfy a prompt (e.g. f′(x) = 3x² = 12 holds at
+      // x = ±2), so any listed x within tolerance counts as correct.
+      const targets = [spec.x, ...(spec.acceptX ?? [])];
+      const verified = targets.some(
+        (t) => math.abs(math.subtract(num, t)) <= tolerance,
+      );
       return verified
         ? { correct: true, message: step.feedback.correct }
         : {

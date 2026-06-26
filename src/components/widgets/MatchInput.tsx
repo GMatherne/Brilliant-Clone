@@ -15,12 +15,26 @@ interface MatchInputProps {
   isCorrect?: boolean;
 }
 
+/**
+ * A draggable label in the bank. `value` is the LaTeX shown to the learner; `id`
+ * is a stable per-question handle so two tiles that read the same (e.g. a
+ * distractor that mirrors a correct answer, or two prompts sharing an answer)
+ * stay distinct for React keys, availability, and drag highlighting.
+ */
+interface Tile {
+  id: string;
+  value: string;
+}
+
 type DropTarget = { kind: "slot"; index: number } | { kind: "bank" } | null;
 
 interface DragInfo {
-  option: string;
+  /** LaTeX of the dragged label (what lands in a slot and shows in the ghost). */
+  value: string;
   /** Slot index the option is dragged from, or null when it comes from the bank. */
   from: number | null;
+  /** Bank tile id when dragging from the bank, for precise dimming of duplicates. */
+  tileId: string | null;
   startX: number;
   startY: number;
   pointerId: number;
@@ -44,10 +58,11 @@ function shuffle<T>(items: T[]): T[] {
  * Pair each fixed left-hand prompt with one right-hand option. Works with both
  * mouse and touch via pointer events: drag an option onto a slot to place it, or
  * tap an option to drop it into the active slot (or the first empty one). Tap a
- * filled slot to clear it and re-pick. Each option is used at most once, so
- * placing it in a new slot moves it out of any slot it already occupied. On
- * reveal, each filled slot colors by its own correctness — green if that pair is
- * right, red if wrong — without exposing the correct option for the wrong ones.
+ * filled slot to clear it and re-pick. Each tile is used at most once, but tiles
+ * may share the same label (duplicates are tracked by id, not value), so a
+ * question can offer plausible repeated answers. On reveal, each filled slot
+ * colors by its own correctness — green if that pair is right, red if wrong —
+ * without exposing the correct option for the wrong ones.
  */
 export function MatchInput({
   spec,
@@ -73,40 +88,62 @@ export function MatchInput({
   // selection when the question (spec) changes.
   useEffect(() => setActive(null), [spec]);
 
-  // Bank = every correct match plus any distractors, shuffled once per question.
-  // The spec reference is stable within a step, so a retry keeps the layout and
-  // it only reshuffles when the step changes.
-  const options = useMemo(
-    () => shuffle([...spec.pairs.map((p) => p.match), ...(spec.distractors ?? [])]),
+  // Bank = a tile per correct match plus one per distractor, each with a stable
+  // id, shuffled once per question. The spec reference is stable within a step,
+  // so a retry keeps the layout and it only reshuffles when the step changes.
+  // Ids let identical labels coexist (duplicate or shared answers).
+  const tiles = useMemo<Tile[]>(
+    () =>
+      shuffle([
+        ...spec.pairs.map((p, i) => ({ id: `m${i}`, value: p.match })),
+        ...(spec.distractors ?? []).map((d, i) => ({ id: `d${i}`, value: d })),
+      ]),
     [spec],
   );
-  const available = options.filter((o) => !picks.includes(o));
 
-  // Place an option into a slot; since an option is used once, pull it out of
-  // any slot it already sits in first.
-  const assignToSlot = (option: string, target: number) => {
+  // Availability is a multiset: each placed value consumes one tile of that
+  // value, so duplicates show the right remaining count rather than vanishing
+  // together. Which specific id is consumed is irrelevant — same-value tiles are
+  // visually identical — but the walk over the stable `tiles` order keeps it
+  // deterministic across renders.
+  const available: Tile[] = (() => {
+    const used = new Map<string, number>();
+    for (const p of picks) if (p != null) used.set(p, (used.get(p) ?? 0) + 1);
+    const out: Tile[] = [];
+    for (const t of tiles) {
+      const remaining = used.get(t.value) ?? 0;
+      if (remaining > 0) used.set(t.value, remaining - 1);
+      else out.push(t);
+    }
+    return out;
+  })();
+
+  // Place a label into a slot. A tile dragged out of another slot vacates its
+  // origin so it isn't duplicated; a tile coming from the bank (`from` null)
+  // adds a fresh instance and must NOT disturb identical labels placed
+  // elsewhere. Any existing occupant of `target` is bumped back to the bank.
+  const placeIntoSlot = (label: string, target: number, from: number | null) => {
     const next = spec.pairs.map((_, i) => picks[i]);
-    const prev = next.indexOf(option);
-    if (prev !== -1) next[prev] = null;
-    next[target] = option;
+    if (from !== null && from !== target) next[from] = null;
+    next[target] = label;
     onChange(next);
     setActive(null);
   };
 
-  // Return an option to the bank by clearing whichever slot holds it.
-  const clearOption = (option: string) => {
-    const next = spec.pairs.map((_, i) => picks[i]);
-    const idx = next.indexOf(option);
-    if (idx === -1) return;
-    next[idx] = null;
+  // Return a slot's label to the bank by clearing that exact slot (by index, so
+  // duplicate labels don't clear the wrong slot).
+  const clearSlot = (i: number) => {
+    if (i < 0 || picks[i] == null) return;
+    const next = spec.pairs.map((_, k) => picks[k]);
+    next[i] = null;
     onChange(next);
   };
 
-  const onOptionTap = (option: string) => {
+  const onOptionTap = (label: string) => {
     if (disabled || justDraggedRef.current) return;
     const target = active ?? picks.findIndex((p) => p === null);
     if (target < 0) return;
-    assignToSlot(option, target);
+    placeIntoSlot(label, target, null);
   };
 
   const onSlotTap = (i: number) => {
@@ -145,7 +182,7 @@ export function MatchInput({
     if (!d.moved && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < MOVE_THRESHOLD)
       return;
     d.moved = true;
-    setGhost({ x: e.clientX, y: e.clientY, label: d.option });
+    setGhost({ x: e.clientX, y: e.clientY, label: d.value });
     setHover(dropTargetAt(e.clientX, e.clientY));
   };
 
@@ -167,9 +204,10 @@ export function MatchInput({
       justDraggedRef.current = false;
     }, 0);
     const target = dropTargetAt(e.clientX, e.clientY);
-    if (target?.kind === "slot") assignToSlot(d.option, target.index);
-    else if (target?.kind === "bank") clearOption(d.option);
-    else if (d.from !== null) clearOption(d.option);
+    if (target?.kind === "slot") placeIntoSlot(d.value, target.index, d.from);
+    // Dropping onto the bank or outside clears the origin slot; a tile dragged
+    // from the bank was never placed, so there's nothing to clear.
+    else if (d.from !== null) clearSlot(d.from);
   };
 
   const onWindowMove = useRef((e: globalThis.PointerEvent) => moveRef.current(e)).current;
@@ -185,13 +223,15 @@ export function MatchInput({
 
   const startDrag = (
     e: ReactPointerEvent,
-    option: string | null,
+    label: string | null,
     from: number | null,
+    tileId: string | null,
   ) => {
-    if (disabled || e.button !== 0 || !option) return;
+    if (disabled || e.button !== 0 || !label) return;
     dragRef.current = {
-      option,
+      value: label,
       from,
+      tileId,
       startX: e.clientX,
       startY: e.clientY,
       pointerId: e.pointerId,
@@ -203,8 +243,8 @@ export function MatchInput({
   };
 
   // While a drag is active (ghost shown), dim the tile/slot it originated from.
-  const draggingOption = ghost ? dragRef.current?.option ?? null : null;
   const draggingFrom = ghost ? dragRef.current?.from ?? null : null;
+  const draggingTileId = ghost ? dragRef.current?.tileId ?? null : null;
 
   const optionBtn =
     "inline-flex min-h-[44px] items-center justify-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 shadow-sm transition hover:border-indigo-400 active:scale-95 disabled:cursor-default disabled:opacity-60 touch-none cursor-grab select-none";
@@ -248,7 +288,7 @@ export function MatchInput({
                 type="button"
                 data-dropzone={`slot-${i}`}
                 disabled={disabled}
-                onPointerDown={(e) => startDrag(e, chosen, i)}
+                onPointerDown={(e) => startDrag(e, chosen, i, null)}
                 onClick={() => onSlotTap(i)}
                 aria-label={
                   chosen
@@ -281,19 +321,19 @@ export function MatchInput({
               All labels placed — drag or tap a match to change it.
             </span>
           ) : (
-            available.map((opt) => (
+            available.map((tile) => (
               <button
-                key={opt}
+                key={tile.id}
                 type="button"
                 disabled={disabled}
-                aria-label={`Option ${opt}. Drag onto a match, or tap to place it.`}
-                onPointerDown={(e) => startDrag(e, opt, null)}
-                onClick={() => onOptionTap(opt)}
+                aria-label={`Option ${tile.value}. Drag onto a match, or tap to place it.`}
+                onPointerDown={(e) => startDrag(e, tile.value, null, tile.id)}
+                onClick={() => onOptionTap(tile.value)}
                 className={`${optionBtn} ${
-                  draggingFrom === null && draggingOption === opt ? "opacity-30" : ""
+                  draggingTileId === tile.id ? "opacity-30" : ""
                 }`}
               >
-                <RichText text={opt} />
+                <RichText text={tile.value} />
               </button>
             ))
           )}

@@ -145,6 +145,20 @@ describe("checkAnswer", () => {
       expect(checkAnswer(step, 0.2).correct).toBe(true);
       expect(checkAnswer(step, 0.3).correct).toBe(false);
     });
+
+    it("accepts any acceptX point (e.g. ±2 both have slope 12 for x³)", () => {
+      const multi = stepWith({
+        type: "graph_point",
+        x: 2,
+        acceptX: [-2],
+        tolerance: 0.25,
+      });
+      expect(checkAnswer(multi, 2).correct).toBe(true);
+      expect(checkAnswer(multi, -2).correct).toBe(true);
+      // Points that satisfy neither root are still wrong.
+      expect(checkAnswer(multi, 0).correct).toBe(false);
+      expect(checkAnswer(multi, 1).correct).toBe(false);
+    });
   });
 
   describe("power_term", () => {
@@ -245,6 +259,33 @@ describe("checkAnswer", () => {
       expect(checkAnswer(step, ["x^3/3", null, "x^4/4"]).correct).toBe(false);
       expect(checkAnswer(step, ["x^3/3", "x^2/2"]).correct).toBe(false);
       expect(checkAnswer(step, undefined).correct).toBe(false);
+    });
+
+    it("grades a distractor that mirrors a correct value by position", () => {
+      // "2" is both the correct answer for 1+1 and a distractor, so placing "2"
+      // on 2+2 must still be wrong even though the same label is correct above.
+      const dup = stepWith({
+        type: "match",
+        pairs: [
+          { prompt: "$1+1$", match: "2" },
+          { prompt: "$2+2$", match: "4" },
+        ],
+        distractors: ["2"],
+      });
+      expect(checkAnswer(dup, ["2", "4"]).correct).toBe(true);
+      expect(checkAnswer(dup, ["2", "2"]).correct).toBe(false);
+    });
+
+    it("accepts two prompts that share the same correct answer", () => {
+      const shared = stepWith({
+        type: "match",
+        pairs: [
+          { prompt: "$1+1$", match: "2" },
+          { prompt: "$4-2$", match: "2" },
+        ],
+      });
+      expect(checkAnswer(shared, ["2", "2"]).correct).toBe(true);
+      expect(checkAnswer(shared, ["2", null]).correct).toBe(false);
     });
   });
 

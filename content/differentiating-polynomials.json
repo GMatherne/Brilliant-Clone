@@ -399,7 +399,6 @@
       "interaction": {
         "answer": {
           "type": "sign_chart",
-          "variableLabel": "f(x) = x² − 4x",
           "points": [2],
           "options": ["Increasing", "Decreasing"],
           "regions": [{ "correctIndex": 1 }, { "correctIndex": 0 }]
@@ -430,7 +429,7 @@
             { "prompt": "$x^2 - 2x$", "match": "0" },
             { "prompt": "$3x^2$", "match": "6" }
           ],
-          "distractors": ["2"]
+          "distractors": ["2", "4", "8", "1", "5", "3"]
         }
       },
       "feedback": {

@@ -289,7 +289,7 @@ describe("validateLesson", () => {
       expect(hasError(validateLesson(lesson), /both a prompt and a match/)).toBe(true);
     });
 
-    it("flags duplicate options across matches and distractors", () => {
+    it("allows a distractor that mirrors a correct match (plausible duplicate)", () => {
       const lesson = validLesson();
       lesson.steps[1] = {
         ...matchStep("s2"),
@@ -297,14 +297,31 @@ describe("validateLesson", () => {
           answer: {
             type: "match",
             pairs: [
-              { prompt: "$x^2$", match: "x^3/3" },
-              { prompt: "$x$", match: "x^2/2" },
+              { prompt: "$1+1$", match: "2" },
+              { prompt: "$2+2$", match: "4" },
             ],
-            distractors: ["x^3/3"],
+            distractors: ["2"],
           },
         },
       };
-      expect(hasError(validateLesson(lesson), /duplicate options/)).toBe(true);
+      expect(validateLesson(lesson)).toEqual([]);
+    });
+
+    it("allows two prompts that share the same correct answer", () => {
+      const lesson = validLesson();
+      lesson.steps[1] = {
+        ...matchStep("s2"),
+        interaction: {
+          answer: {
+            type: "match",
+            pairs: [
+              { prompt: "$1+1$", match: "2" },
+              { prompt: "$4-2$", match: "2" },
+            ],
+          },
+        },
+      };
+      expect(validateLesson(lesson)).toEqual([]);
     });
   });
 

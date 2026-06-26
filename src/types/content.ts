@@ -186,6 +186,12 @@ interface SliderAnswer {
 interface GraphPointAnswer {
   type: "graph_point";
   x: number;
+  /**
+   * Extra x-values that also count as correct, each judged with the same
+   * `tolerance` as `x`. Use when several points satisfy the prompt — e.g. for
+   * f′(x) = 3x² = 12 both x = 2 and x = -2 have a tangent slope of 12.
+   */
+  acceptX?: number[];
   tolerance?: number;
 }
 
@@ -262,8 +268,10 @@ interface MatchPair {
   /** Left-hand item shown in fixed order, e.g. "$x^2$". Rendered with inline math ($…$). */
   prompt: string;
   /**
-   * LaTeX of the right-hand option that matches this prompt. Must be unique
-   * across the question's pairs so a placed option maps to exactly one prompt.
+   * LaTeX of the right-hand option that matches this prompt. Values may repeat
+   * across pairs — two prompts can legitimately share the same correct answer.
+   * Grading is positional (by value), so each prompt is checked against its own
+   * `match` regardless of any duplicates in the bank.
    */
   match: string;
 }
@@ -271,19 +279,23 @@ interface MatchPair {
 /**
  * "Match the pairs" question: the learner pairs each fixed left-hand prompt with
  * one right-hand option (e.g. each function with its antiderivative). The option
- * bank holds every pair's `match` plus any `distractors`, shuffled when rendered,
- * and each option can be used at most once. The submitted answer is an array of
- * chosen option values, one per prompt by position (null where a prompt is still
- * unmatched). Graded by position: every prompt must hold its own `match`.
+ * bank holds one tile per pair's `match` plus one per distractor, shuffled when
+ * rendered, and each tile can be used at most once. Tiles may share a label
+ * (the widget tracks them by id), so the bank can offer plausible duplicate
+ * answers. The submitted answer is an array of chosen option values, one per
+ * prompt by position (null where a prompt is still unmatched). Graded by
+ * position: every prompt must hold its own `match`.
  */
 export interface MatchAnswer {
   type: "match";
   /** The pairs to match, with prompts shown in this order. */
   pairs: MatchPair[];
   /**
-   * Extra unmatched options (LaTeX) mixed into the bank as distractors, so the
-   * answer can't be reached purely by elimination. Each must be unique and must
-   * not collide with any pair's `match`.
+   * Extra options (LaTeX) mixed into the bank as distractors, so the answer
+   * can't be reached purely by elimination. Labels may repeat and may even
+   * mirror a pair's `match` (e.g. a second "2" alongside the correct "2" so a
+   * sibling prompt can't be solved by process of elimination); each distractor
+   * still adds exactly one extra tile to the bank.
    */
   distractors?: string[];
 }

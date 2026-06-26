@@ -208,17 +208,11 @@ function validateStep(step: Step, lessonId: string): string[] {
         );
       }
     });
-    // Grading maps an option back to a prompt by value, so every option in the
-    // bank (matches + distractors) must be unique.
-    const optionPool = [
-      ...answer.pairs.map((p) => p.match),
-      ...(answer.distractors ?? []),
-    ];
-    if (new Set(optionPool).size !== optionPool.length) {
-      errors.push(
-        `Step "${step.id}" in "${lessonId}" match has duplicate options; each match and distractor must be unique.`,
-      );
-    }
+    // Options (matches + distractors) may intentionally share a label: two
+    // prompts can have the same correct answer, or a distractor can mirror a
+    // correct value to defeat solving by elimination. Grading is positional and
+    // by value, and the widget tracks each tile by a stable id, so no uniqueness
+    // is required and duplicate labels are allowed.
   }
 
   if (answer?.type === "sign_chart") {

@@ -12,7 +12,6 @@ interface LevelSectionProps {
   status: LevelStatus;
   completion: { done: number; total: number; percent: number };
   progress: Record<string, { status: string; currentStepIndex?: number }>;
-  continueId: string | null;
   isLast: boolean;
 }
 
@@ -21,7 +20,6 @@ export function LevelSection({
   status,
   completion,
   progress,
-  continueId,
   isLast,
 }: LevelSectionProps) {
   const locked = status === "locked";
@@ -114,7 +112,6 @@ export function LevelSection({
             meta={meta}
             status={progress[meta.id]?.status ?? "not_started"}
             progress={progress}
-            recommended={meta.id === continueId}
           />
         ))}
       </div>

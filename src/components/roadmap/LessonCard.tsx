@@ -11,10 +11,9 @@ interface LessonCardProps {
   meta: LessonMeta;
   status: string;
   progress: Record<string, { status: string; currentStepIndex?: number }>;
-  recommended?: boolean;
 }
 
-export function LessonCard({ meta, status, progress, recommended }: LessonCardProps) {
+export function LessonCard({ meta, status, progress }: LessonCardProps) {
   const unlocked = isLessonUnlocked(meta.id, progress);
   const isDone = status === "complete" || status === "mastered";
   const inProgress = status === "in_progress";
@@ -27,11 +26,9 @@ export function LessonCard({ meta, status, progress, recommended }: LessonCardPr
 
   return (
     <div
-      className={`rounded-2xl border p-4 transition ${
-        recommended
-          ? "border-indigo-400 ring-2 ring-indigo-200 bg-indigo-50/50"
-          : "border-slate-200 bg-white"
-      } ${!unlocked ? "opacity-60" : ""}`}
+      className={`rounded-2xl border border-slate-200 bg-white p-4 transition ${
+        !unlocked ? "opacity-60" : ""
+      }`}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
         <div className="min-w-0 sm:flex-1">
@@ -39,9 +36,6 @@ export function LessonCard({ meta, status, progress, recommended }: LessonCardPr
             <span className="uppercase tracking-wide">Lesson {meta.order}</span>
             <span aria-hidden>·</span>
             <span>~{meta.estimatedMinutes} min</span>
-            {recommended && (
-              <span className="font-medium text-indigo-600">Recommended next</span>
-            )}
           </div>
           <h3 className="font-semibold text-lg text-slate-900">{meta.title}</h3>
         </div>

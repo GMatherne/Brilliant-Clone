@@ -45,7 +45,6 @@ export function XpBadge() {
       <div
         key={burstKey ?? "static"}
         className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-gradient-to-r from-amber-300 to-yellow-200 text-amber-900 px-2.5 py-1.5 text-sm font-semibold shadow-sm ring-1 ring-amber-300/60 transition-transform group-hover:scale-105 ${bursting ? "xp-pop" : ""}`}
-        title="Experience points — earned by completing lessons"
         aria-label={`${xp.toLocaleString()} XP total`}
       >
         <Icon

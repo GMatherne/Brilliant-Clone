@@ -20,7 +20,6 @@ export function StreakBadge() {
             ? "bg-orange-100 text-orange-800"
             : "bg-slate-100 text-slate-500"
         }`}
-        title={active ? "Current learning streak" : "Learn today to start a streak"}
         aria-label={active ? `${count} day streak` : "No active streak yet"}
       >
         <Icon

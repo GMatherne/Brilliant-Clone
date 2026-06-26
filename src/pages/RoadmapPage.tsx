@@ -182,7 +182,6 @@ export function RoadmapPage() {
                     status={getLevelStatus(level, progress)}
                     completion={getLevelCompletion(level, progress)}
                     progress={progress}
-                    continueId={continueId}
                     isLast={i === levels.length - 1}
                   />
                 ))}
