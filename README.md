@@ -9,8 +9,8 @@ A Brilliant-style, **learn-by-doing** web app for the foundations of calculus. I
 watching videos, you work through short interactive steps — drag a slider on a live graph,
 tap a point on a curve, build a derivative term-by-term, drag tiles to assemble an answer —
 and get **instant, hand-written feedback** on every attempt. All grading happens in the
-browser; the only server-side code is a small Cloudflare Worker that powers the optional
-AI tutor (keeping the OpenAI key off the client).
+browser; the only server-side code the app talks to is a small Cloudflare Worker that powers
+the optional AI tutor (keeping the OpenAI key off the client).
 
 > For a full tour of how everything works internally, see **[OVERVIEW.md](./OVERVIEW.md)**.
 
@@ -47,7 +47,8 @@ back to demo mode, so it runs with zero configuration.
 | `npm run test` | Run unit tests once (Vitest) |
 | `npm run test:watch` | Watch-mode tests |
 | `npm run test:coverage` | Tests with V8 coverage (`src/lib/**`) |
-| `npm run validate:lessons` | Validate every lesson JSON (6–10 steps, ≥1 slider graph, etc.) |
+| `npm run validate:lessons` | Validate every lesson JSON (6–10 steps, ≥1 slider graph, etc.) + the reference deck |
+| `npm run kill-ports` | Free the dev/preview ports (5173 / 5174) if a server is stuck |
 
 ## Question types
 
@@ -90,7 +91,9 @@ next):
 Each lesson is ~6–8 minutes, has 6–10 steps, and includes at least one slider-graph
 interaction. Finished lessons unlock per-lesson **Practice**; the roadmap also offers a
 cross-lesson **Targeted review** (weakest/stalest concepts first) and **Custom practice**
-(pick your own concepts), and completed levels unlock a **Level review**.
+(pick your own concepts), and completed levels unlock a **Level review**. A **Reference**
+cheat sheet of key formulas and definitions — grouped by level and unlocking as you complete
+the course — is one tap from the header on any page.
 
 ## Architecture
 
@@ -99,21 +102,24 @@ state, Firebase for identity + per-user storage, and a small Cloudflare Worker p
 optional AI tutor.
 
 ```text
-content/                 # course.json + 10 lesson JSON files (the entire course)
-scripts/                 # validate-lessons.ts (CLI lesson validator)
+content/                 # course.json + 10 lesson JSON files + reference.json (course + cheat sheet)
+scripts/                 # validate-lessons.ts (CLI lesson + reference validator)
 src/
   lib/                   # contentLoader · feedbackEngine · progressService ·
-                         #   masteryService · reviewPlanner · validateLesson ·
-                         #   aiTutor · inlineMarkup · firebase  (+ *.test.ts)
-  contexts/              # AuthContext/AuthProvider · ProgressContext/ProgressProvider
+                         #   masteryService · reviewPlanner · learnerInsights ·
+                         #   aiTutor · inlineMarkup · referenceService ·
+                         #   validateLesson · validateReference · firebase  (+ *.test.ts)
+  contexts/              # AuthContext/AuthProvider · ProgressContext/ProgressProvider ·
+                         #   SessionInsightsContext/Provider
   hooks/                 # useSessionExitGuard · useCountUp
   components/
-    auth/ common/ layout/ lesson/ widgets/ roadmap/ habit/ profile/ dev/
+    auth/ common/ layout/ lesson/ widgets/ reference/ roadmap/ habit/ profile/ dev/
   pages/                 # Landing, Login, Signup, Roadmap, Lesson, Practice,
                          #   CustomPractice, Review, LevelReview, Profile, Settings
   types/content.ts       # domain types + tuning constants
-tutor-proxy/             # Cloudflare Worker proxy for the AI tutor — holds the
-                         #   OpenAI key server-side + verifies the Firebase ID token
+tutor-proxy/             # Cloudflare Worker proxy for the AI tutor (active) — holds
+                         #   the OpenAI key server-side + verifies the Firebase ID token
+functions/               # equivalent Firebase Cloud Functions tutor proxy (alternative)
 firebase.json            # Hosting (SPA rewrite) + Firestore + Functions + Auth
 firestore.rules          # per-user access rules + server-only aiUsage/config
 vite.config.ts           # Vite + Tailwind + Vitest
@@ -121,13 +127,14 @@ vite.config.ts           # Vite + Tailwind + Vitest
 
 Key features: instant client-side grading (math.js), interactive SVG graphs (secant/tangent,
 area shading), sequential unlock, per-lesson practice, **targeted review** (weakness + recency)
-and custom practice plus level review, XP, streaks, **12 achievement milestones**, **per-concept
-mastery** with a profile dashboard (stats, activity heatmap, weak areas), and account management.
+and custom practice plus level review, a level-gated **reference cheat sheet**, XP, streaks,
+**12 achievement milestones**, **per-concept mastery** with a profile dashboard (stats, activity
+heatmap, weak areas), and account management.
 All **grading is deterministic and AI-free** — every problem,
 hint, and answer key is hand-authored and checked in the browser. An **optional AI concept
 tutor** (OpenAI, behind a secure Cloudflare Worker proxy) can layer on top to _explain_ a graded
-step; it never grades, and the app runs unchanged when it is disabled (see **AI concept tutor**
-below).
+step — personalized with the learner's concept mastery and recent activity; it never grades, and
+the app runs unchanged when it is disabled (see **AI concept tutor** below).
 
 ## Firebase setup
 
@@ -152,7 +159,9 @@ VITE_TUTOR_PROXY_URL=...
 
 After a step is graded, learners can optionally ask an AI tutor to _explain_ why their answer
 was right or wrong and walk through the concept. The deterministic engine stays the only judge:
-the model is handed the verdict and the correct answer and is asked only to explain. When the
+the model is handed the verdict and the correct answer and is asked only to explain.
+Explanations are personalized with PII-free **learner-history** signals — the concept's mastery,
+how long since it was last practiced, and the concepts missed earlier in the session. When the
 tutor proxy URL isn't configured (including the zero-config demo and offline use), the tutor
 simply stays hidden and nothing else changes.
 
@@ -225,8 +234,10 @@ Unit tests (Vitest) live next to the code they cover under `src/lib/`, with cove
 | `contentLoader.test.ts` | Loading, levels, sessions, unlock/completion logic |
 | `masteryService.test.ts` | Concept catalog + mastery/weak-area scoring |
 | `reviewPlanner.test.ts` | Targeted-review ranking (weakness + recency) |
+| `learnerInsights.test.ts` | Concept insight + session miss tally for the tutor |
 | `aiTutor.test.ts` | Tutor context building + answer descriptions |
 | `inlineMarkup.test.ts` | Inline math/markdown normalization + tokenizing |
+| `referenceService.test.ts` | Reference grouping + level-gated unlocking |
 | `validateLesson.test.ts` | Lesson-schema validation rules |
 
 ```bash
