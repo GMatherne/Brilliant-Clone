@@ -445,11 +445,6 @@ export interface Lesson {
   published: boolean;
   steps: Step[];
   /**
-   * @deprecated Use `practiceBank`. Legacy fixed practice set kept for
-   * backward compatibility; the loader falls back to it when no bank exists.
-   */
-  practice?: Step[];
-  /**
    * Pool of practice questions for this lesson. Each practice session draws a
    * random subset so repeated practice stays varied.
    */
@@ -777,9 +772,6 @@ export const XP_PER_LESSON = 50;
  * primary way to earn XP.
  */
 export const XP_PER_PRACTICE_CORRECT = 10;
-
-/** Number of questions a legacy fixed practice set should contain. */
-export const PRACTICE_STEPS = 3;
 
 /** Questions shown in a single lesson practice session (sampled from the bank). */
 export const PRACTICE_SESSION_SIZE = 3;
