@@ -367,7 +367,6 @@ Tuning constants (also in `content.ts`):
 | `PRACTICE_SESSION_SIZE` | 3 | Questions per practice session |
 | `REVIEW_SESSION_SIZE` | 5 | Questions per mixed-review session |
 | `PRACTICE_BANK_MIN` | 3 | Minimum questions in a practice bank |
-| `PRACTICE_STEPS` | 3 | Size of the legacy fixed practice set (deprecated) |
 | `MASTERY_PROFICIENT` / `MASTERY_MASTERED` | 0.6 / 0.9 | First-try accuracy for concept tiers |
 
 ---

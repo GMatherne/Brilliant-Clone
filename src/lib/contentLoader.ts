@@ -65,15 +65,15 @@ function lessonQuestions(lesson: Lesson | undefined): Step[] {
 
 /**
  * The pool of practice questions for a lesson. Uses the authored `practiceBank`
- * (or legacy `practice`) only — the lesson's own questions are deliberately left
- * out so practice doesn't just rerun problems the learner already worked through
- * in the lesson. If the authored bank is too small to fill a session, we backfill
- * with the lesson's own interactive questions just enough to reach the minimum.
+ * only — the lesson's own questions are deliberately left out so practice
+ * doesn't just rerun problems the learner already worked through in the lesson.
+ * If the authored bank is too small to fill a session, we backfill with the
+ * lesson's own interactive questions just enough to reach the minimum.
  * Deduplicated by id.
  */
 export function getPracticeBank(lessonId: string): Step[] {
   const lesson = lessonsById.get(lessonId);
-  const authored = lesson?.practiceBank ?? lesson?.practice ?? [];
+  const authored = lesson?.practiceBank ?? [];
   const seen = new Set<string>();
   const pool: Step[] = [];
   const add = (q: Step) => {

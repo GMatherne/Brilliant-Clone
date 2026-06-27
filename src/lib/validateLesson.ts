@@ -2,7 +2,6 @@ import type { Lesson, Step } from "../types/content";
 import {
   MAX_STEPS,
   MIN_STEPS,
-  PRACTICE_STEPS,
   PRACTICE_BANK_MIN,
   MIN_MC_OPTIONS,
   MIN_MATCH_PAIRS,
@@ -28,7 +27,6 @@ export function validateLesson(lesson: Lesson): string[] {
     errors.push(...validateStep(step, lesson.id));
   }
 
-  errors.push(...validatePractice(lesson));
   errors.push(...validatePracticeBank(lesson));
 
   return errors;
@@ -52,38 +50,6 @@ function validatePracticeBank(lesson: Lesson): string[] {
 
   const ids = new Set<string>();
   for (const step of bank) {
-    if (step.type === "read") {
-      errors.push(
-        `Practice question "${step.id}" in "${lesson.id}" must be interactive, not a read step.`,
-      );
-    }
-    if (ids.has(step.id)) {
-      errors.push(`Duplicate practice question id "${step.id}" in "${lesson.id}".`);
-    }
-    ids.add(step.id);
-    errors.push(...validateStep(step, lesson.id));
-  }
-
-  return errors;
-}
-
-/**
- * Practice is optional, but when present it must be a short set of interactive
- * questions (no "read" steps) so every item can be answered and graded.
- */
-function validatePractice(lesson: Lesson): string[] {
-  const errors: string[] = [];
-  const practice = lesson.practice;
-  if (!practice) return errors;
-
-  if (practice.length !== PRACTICE_STEPS) {
-    errors.push(
-      `Lesson "${lesson.id}" has ${practice.length} practice questions; expected ${PRACTICE_STEPS}.`,
-    );
-  }
-
-  const ids = new Set<string>();
-  for (const step of practice) {
     if (step.type === "read") {
       errors.push(
         `Practice question "${step.id}" in "${lesson.id}" must be interactive, not a read step.`,
