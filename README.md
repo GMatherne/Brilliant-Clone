@@ -7,10 +7,12 @@
 
 A Brilliant-style, **learn-by-doing** web app for the foundations of calculus. Instead of
 watching videos, you work through short interactive steps — drag a slider on a live graph,
-tap a point on a curve, build a derivative term-by-term, drag tiles to assemble an answer —
-and get **instant, hand-written feedback** on every attempt. All grading happens in the
-browser; the only server-side code the app talks to is a small Cloudflare Worker that powers
-the optional AI tutor (keeping the OpenAI key off the client).
+tap a point on a curve, build a derivative term-by-term, drag tiles to assemble an answer,
+rotate a tangent, paint the intervals where a curve rises — and get **instant, hand-written
+feedback** on every attempt, with a per-question **assistance dial** that ranges from a
+guided walkthrough to no help at all. All grading happens in the browser; the only
+server-side code the app talks to is a small Cloudflare Worker that powers the optional AI
+tutor (keeping the OpenAI key off the client).
 
 > For a full tour of how everything works internally, see **[OVERVIEW.md](./OVERVIEW.md)**.
 
@@ -52,7 +54,7 @@ back to demo mode, so it runs with zero configuration.
 
 ## Question types
 
-Twelve step types fit the concept being taught:
+Eighteen step types fit the concept being taught:
 
 | Type | Learner action | Graded |
 |------|----------------|:------:|
@@ -68,6 +70,12 @@ Twelve step types fit the concept being taught:
 | `order_list` | Drag shuffled items into their correct order | Yes |
 | `riemann` | Drag a slider to pile up rectangles until a Riemann sum converges | Yes |
 | `predict` | Drag a marker along the curve to predict a feature, then lock it in to reveal the truth | Yes |
+| `construct_graph` | Drag a row of points (fixed in x, free in y) to build a curve, e.g. plot `f'` | Yes |
+| `paint_intervals` | Brush on the segments where a condition holds (e.g. where `f` is increasing) | Yes |
+| `select_region` | Tap the region(s) of the plot that satisfy a property (steepest, concave up, …) | Yes |
+| `tangent_line` | Rotate a line pinned to the curve until its slope matches the curve's | Yes |
+| `integral_bounds` | Drag two handles to set the limits `a, b` of a definite integral | Yes |
+| `simulate` | Drive a value over time (e.g. a throttle) to trace a target curve, its integral, or its derivative | Yes |
 
 Graph-backed steps can also carry a **slider** answer (drag to a target) or a **graph_point**
 answer (tap the correct point on the curve).
@@ -76,6 +84,16 @@ Any distance-based step (`slider`, `numeric`, `power_term`) can opt into **live 
 `"liveCheck": true`: it is graded continuously as the learner manipulates and locks in the
 instant it's right — no separate **Check Answer** press, with a warmer/colder proximity meter
 along the way.
+
+Every question also carries a three-way **assistance toggle** — a sticky per-learner
+preference (default **Hints**):
+
+- **Solve it** — a guided "Work through it" walkthrough animates the widget to the answer
+  while a step-by-step worked **solution** reveals the reasoning (lesson questions only; it's a
+  worked example, so it never counts toward mastery).
+- **Hints** — warmer/colder live feedback while tuning, the authored hint offered proactively,
+  an optional **concept sandbox** (an ungraded explorer on a *different* example), and the AI tutor.
+- **No help** — hints and the proactive sandbox are hidden; the AI tutor stays available on demand.
 
 ## The course
 
@@ -91,10 +109,12 @@ next):
 Each lesson is ~6–8 minutes, has 6–10 steps, and includes at least one slider-graph
 interaction. Finished lessons unlock per-lesson **Practice**; the roadmap also offers a
 cross-lesson **Targeted review** (weakest/stalest concepts first) and **Custom practice**
-(pick your own concepts), and completed levels unlock a **Level review**. A **Reference**
-cheat sheet of key formulas and definitions — grouped by level and unlocking a level at a
-time as you advance (each level's facts open once the previous level is complete) — is one
-tap from the header on any page.
+(pick your own concepts), and completed levels unlock a **Level review**. Confident learners
+can **test out** of a level to skip ahead — pass a short mixed challenge at ≥ 80% first-try
+accuracy and the bypassed lessons are marked complete. A **Reference** cheat sheet of key
+formulas and definitions — grouped by level and unlocking a level at a time as you advance
+(each level's facts open once the previous level is complete) — is one tap from the header
+on any page.
 
 ## Architecture
 
@@ -106,36 +126,41 @@ optional AI tutor.
 content/                 # course.json + 10 lesson JSON files + reference.json (course + cheat sheet)
 scripts/                 # validate-lessons.ts (CLI lesson + reference validator)
 src/
-  lib/                   # contentLoader · feedbackEngine · progressService ·
-                         #   masteryService · reviewPlanner · learnerInsights ·
-                         #   aiTutor · inlineMarkup · referenceService ·
-                         #   validateLesson · validateReference · firebase  (+ *.test.ts)
-  contexts/              # AuthContext/AuthProvider · ProgressContext/ProgressProvider ·
-                         #   SessionInsightsContext/Provider
-  hooks/                 # useSessionExitGuard · useCountUp
+  lib/                   # contentLoader · feedbackEngine · progressService · masteryService ·
+                         #   reviewPlanner · learnerInsights · aiTutor · answerFormat ·
+                         #   solutionService · sandbox · sound · inlineMarkup · referenceService ·
+                         #   validateLesson · validateReference · lessonStatus · stepHelpers ·
+                         #   constants · milestones · shuffle · reducedMotion · firebase  (+ *.test.ts)
+  contexts/              # Auth · Progress · SessionInsights · Sound (Context + Provider each)
+  hooks/                 # useQuizSession · useSessionExitGuard · useActionLock ·
+                         #   useAssistancePreference · useSoundPreference · useCountUp
   components/
-    auth/ common/ layout/ lesson/ widgets/ reference/ roadmap/ habit/ profile/ dev/
-  pages/                 # Landing, Login, Signup, Roadmap, Lesson, Practice,
-                         #   CustomPractice, Review, LevelReview, Profile, Settings
-  types/content.ts       # domain types + tuning constants
-tutor-proxy/             # Cloudflare Worker proxy for the AI tutor (active) — holds
-                         #   the OpenAI key server-side + verifies the Firebase ID token
-functions/               # equivalent Firebase Cloud Functions tutor proxy (alternative)
-firebase.json            # Hosting (SPA rewrite) + Firestore + Functions + Auth
+    auth/ common/ layout/ lesson/ widgets/ tutor/ reference/ roadmap/ habit/ profile/ dev/
+  pages/                 # Landing, Login, Signup, Roadmap, Lesson, Practice, CustomPractice,
+                         #   Review, LevelReview, TestOut, Profile, Settings
+  types/                 # content.ts (domain types) + icons.ts (icon-name vocabulary)
+tutor-proxy/             # Cloudflare Worker proxy for the AI tutor — holds the OpenAI
+                         #   key server-side + verifies the Firebase ID token
+firebase.json            # Hosting (SPA rewrite + security headers) + Firestore + Auth
 firestore.rules          # per-user access rules + server-only aiUsage/config
-vite.config.ts           # Vite + Tailwind + Vitest
+vite.config.ts           # Vite + Tailwind + Vitest (+ manualChunks code-splitting)
 ```
 
 Key features: instant client-side grading (math.js), interactive SVG graphs (secant/tangent,
-area shading), sequential unlock, per-lesson practice, **targeted review** (weakness + recency)
-and custom practice plus level review, a level-gated **reference cheat sheet**, XP, streaks,
-**12 achievement milestones**, **per-concept mastery** with a profile dashboard (stats, activity
-heatmap, weak areas), and account management.
-All **grading is deterministic and AI-free** — every problem,
-hint, and answer key is hand-authored and checked in the browser. An **optional AI concept
-tutor** (OpenAI, behind a secure Cloudflare Worker proxy) can layer on top to _explain_ a graded
-step — personalized with the learner's concept mastery and recent activity; it never grades, and
-the app runs unchanged when it is disabled (see **AI concept tutor** below).
+area shading) plus a family of dedicated question widgets (construct-graph, paint-intervals,
+select-region, tangent-line, integral-bounds, simulate, Riemann), a per-question **assistance
+toggle** (solve-it walkthrough / hints / no help) with hand-authored worked solutions and
+optional concept sandboxes, sequential unlock with a **test-out** path to skip levels,
+per-lesson practice, **targeted review** (weakness + recency) and custom practice plus level
+review, a level-gated **reference cheat sheet**, XP, streaks, **12 achievement milestones**,
+**per-concept mastery** (which keeps moving with practice/review) shown on a profile dashboard
+(stats, activity heatmap, weak areas), optional sound effects, account management, and a
+hardened deploy (CSP + security headers). All **grading is deterministic and AI-free** — every
+problem, hint, and answer key is hand-authored and checked in the browser. An **optional AI
+concept tutor** (OpenAI, behind a secure Cloudflare Worker proxy) can layer on top to _explain_
+a graded step or answer free-form questions from the roadmap — personalized with the learner's
+concept mastery and recent activity; it never grades, and the app runs unchanged when it is
+disabled (see **AI concept tutor** below).
 
 ## Firebase setup
 
@@ -162,7 +187,9 @@ After a step is graded, learners can optionally ask an AI tutor to _explain_ why
 was right or wrong and walk through the concept. The deterministic engine stays the only judge:
 the model is handed the verdict and the correct answer and is asked only to explain.
 Explanations are personalized with PII-free **learner-history** signals — the concept's mastery,
-how long since it was last practiced, and the concepts missed earlier in the session. When the
+how long since it was last practiced, and the concepts missed earlier in the session. A
+free-form **tutor chat** is also available from the roadmap (a floating button) for general
+questions; the per-step explainer and the roadmap chat share one per-user rate limit. When the
 tutor proxy URL isn't configured (including the zero-config demo and offline use), the tutor
 simply stays hidden and nothing else changes.
 
@@ -223,6 +250,16 @@ npx -y firebase-tools@latest deploy --only firestore:rules
 Live at **https://calculus-lab.web.app**. Auth providers (Email/Password, Google) are enabled
 in the Firebase Console; the deployed domains are authorized there by default.
 
+## Security
+
+Hosting serves a strict **Content-Security-Policy** plus `X-Frame-Options: DENY`,
+`X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`, and HSTS (all in
+`firebase.json`). Per-user **Firestore rules** let signed-in users touch only their own
+documents, while the AI tutor's usage counters/config are server-write-only. The OpenAI key
+never reaches the browser (it lives only as a Cloudflare Worker secret), and `mathjs` is pinned
+to a patched line. The full security review — findings, fixes, and accepted risks — is in
+[`SECURITY.md`](./SECURITY.md).
+
 ## Testing
 
 Unit tests (Vitest) live next to the code they cover under `src/lib/`, with coverage scoped to
@@ -240,6 +277,7 @@ Unit tests (Vitest) live next to the code they cover under `src/lib/`, with cove
 | `inlineMarkup.test.ts` | Inline math/markdown normalization + tokenizing |
 | `referenceService.test.ts` | Reference grouping + level-gated unlocking |
 | `validateLesson.test.ts` | Lesson-schema validation rules |
+| `solutionService.test.ts` | "Solve it" answer seeds + worked-solution blocks |
 
 ```bash
 npm run test            # run all
@@ -249,4 +287,4 @@ npm run test:coverage   # with coverage report (also written to /coverage)
 ## Mobile
 
 Mobile-first UI: portrait and landscape layouts, 44px+ touch targets, safe-area insets, and
-graphs that resize via `ResizeObserver`.
+graphs that resize via `ResizeObserver`. Animations honor `prefers-reduced-motion`.

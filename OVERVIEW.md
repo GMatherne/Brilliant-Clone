@@ -72,7 +72,7 @@ Key principles baked into the build:
 
 ### Learning experience
 - **Interactive lessons** made of 6–10 bite-sized steps each.
-- **Twelve step/answer types** so problems fit the concept:
+- **Eighteen step/answer types** so problems fit the concept:
   | Type | Learner action | Graded |
   |------|----------------|--------|
   | `read` | Tap **Continue** | No |
@@ -87,9 +87,17 @@ Key principles baked into the build:
   | `order_list` | Drag shuffled items into their correct order | Yes |
   | `riemann` | Drag a slider to pile up rectangles until a Riemann sum converges | Yes |
   | `predict` | Drag a marker along the curve to predict a feature, then lock it in to reveal the truth | Yes |
+  | `construct_graph` | Drag a row of fixed-x points up/down to build a curve (e.g. plot `f'`) | Yes |
+  | `paint_intervals` | Brush on the segments where a condition holds (e.g. where `f` increases) | Yes |
+  | `select_region` | Tap the region(s) of the plot that satisfy a property (steepest, concave up…) | Yes |
+  | `tangent_line` | Rotate a line pinned to the curve until its slope matches the curve's | Yes |
+  | `integral_bounds` | Drag two handles to set the limits `a, b` of a definite integral | Yes |
+  | `simulate` | Drive a value over time to trace a target curve, its integral, or its derivative | Yes |
 
   Graph-backed steps can also carry a **slider** answer (drag to a target value)
-  or a **graph_point** answer (tap the correct point on the curve).
+  or a **graph_point** answer (tap the correct point on the curve). The last six
+  types each render their own dedicated SVG widget rather than reusing the shared
+  `GraphWidget`.
 - **Live (continuous) feedback**: any distance-based step (`slider`, `numeric`,
   `power_term`) can set `"liveCheck": true` to be graded as the learner
   manipulates — the same `checkAnswer` runs on every change, the target zone
@@ -105,6 +113,16 @@ Key principles baked into the build:
 - **Instant feedback with progressive hints** — correct/incorrect messages are
   authored per step; hints stay hidden behind a "Show hint" button so they never
   give the answer away.
+- **Per-question assistance toggle** (guidance fading) — a sticky three-way
+  preference: **Solve it** plays a "Work through it" walkthrough that animates the
+  widget to the answer while a hand-authored worked **solution** reveals the
+  reasoning (lesson questions only, excluded from mastery); **Hints** adds
+  warmer/colder live feedback, the proactive authored hint, an optional **concept
+  sandbox** (an ungraded explorer on a *different* example), and the AI tutor;
+  **No help** hides the hints and sandbox (the tutor stays on demand).
+- **Multi-part questions** — a step can chain follow-up parts, revealed one at a
+  time, graded as a single question (one nav square, one mastery question) with a
+  small XP bonus for being multi-part.
 - **Math typesetting** via KaTeX, including inline `$...$` LaTeX inside any
   feedback or prose.
 - **Optional AI concept tutor** — after a step is graded, the learner can ask an
@@ -112,13 +130,18 @@ Key principles baked into the build:
   It's handed the verdict and the correct answer and asked only to explain — it
   never grades or generates problems. The explanation is personalized with
   PII-free *learner history* (this concept's mastery and how long since it was
-  last practiced, plus what's been missed earlier this session). It stays hidden
-  unless the tutor proxy URL (`VITE_TUTOR_PROXY_URL`) is configured, so the
+  last practiced, plus what's been missed earlier this session). A free-form
+  **tutor chat** is also reachable from the roadmap for general questions; the
+  per-step explainer and the roadmap chat share one per-user rate limit. It stays
+  hidden unless the tutor proxy URL (`VITE_TUTOR_PROXY_URL`) is configured, so the
   zero-config demo is unaffected.
 
 ### Course & progression
 - **Guided path**: lessons are grouped into **levels** and unlock sequentially —
   lesson *N* opens only after lesson *N−1* is complete.
+- **Test out to skip ahead**: a learner can attempt a short mixed challenge drawn
+  from the lessons up to a target level; passing at ≥ 80% first-try accuracy marks
+  those lessons complete and unlocks the level.
 - **Resume anywhere**: progress is saved per step, so a refresh or device switch
   returns the learner to exactly where they left off.
 - **Per-step navigation bar** that doubles as a progress indicator and lets
@@ -154,6 +177,11 @@ Key principles baked into the build:
 - **Accounts** via email/password or Google sign-in.
 - **Mobile-first, responsive UI** with 44px+ touch targets, safe-area insets,
   portrait/landscape support, and graphs that resize via `ResizeObserver`.
+  Animations honor `prefers-reduced-motion`.
+- **Sound effects** (Web Audio) for answers, rewards, and taps, behind a sticky
+  per-learner on/off preference.
+- **Hardened hosting** — a strict Content-Security-Policy and security headers
+  (see §14).
 - **Demo/offline mode** that requires no backend at all.
 
 ---
@@ -174,7 +202,9 @@ organized into 5 levels and 10 lessons:
 Each lesson is ~6–8 minutes, contains 6–10 steps, and includes at least one
 slider-graph interaction. Finished lessons expose per-lesson **Practice**; the
 roadmap also offers a cross-lesson **Targeted review** and **Custom practice**,
-and completed levels expose a **Level review**. A hand-authored **Reference**
+and completed levels expose a **Level review**. Confident learners can **test
+out** of a level to skip ahead (pass a short mixed challenge at ≥ 80% first-try
+accuracy). A hand-authored **Reference**
 cheat sheet (`content/reference.json`) of the course's key formulas and
 definitions is one tap from the header on any page, unlocking a level at a time
 as the learner advances (each level's facts open once the previous level is
@@ -194,8 +224,9 @@ complete).
 | Routing | react-router-dom 7 |
 | Math display | KaTeX (`react-katex`) |
 | Math evaluation | math.js |
+| Audio | Web Audio API (sound effects) |
 | Auth & database | Firebase 11 (Auth + Firestore) |
-| Hosting | Firebase Hosting (SPA rewrite) |
+| Hosting | Firebase Hosting (SPA rewrite + CSP/security headers) |
 | AI tutor proxy | Cloudflare Worker → OpenAI (optional) |
 | Testing | Vitest + V8 coverage |
 
@@ -263,45 +294,65 @@ scripts/
 
 src/
   main.tsx                   # React entry point
-  App.tsx                    # Routes + provider nesting
-  types/content.ts           # Domain types + tuning constants
+  App.tsx                    # Provider nesting + per-route lazy-loaded pages
+  types/
+    content.ts               # Domain types (pure types only)
+    icons.ts                 # IconName vocabulary (shared by the icon registry)
 
   lib/
     firebase.ts              # Firebase init + mode flags
-    contentLoader.ts         # Import/validate lessons; levels, sessions, unlock
-    feedbackEngine.ts        # math.js grading + secant/tangent/derivative math
+    contentLoader.ts         # Import/validate lessons; levels; unlock; session builders
+    feedbackEngine.ts        # math.js grading (checkAnswer) + secant/tangent/derivative math
     progressService.ts       # Firestore/localStorage; streaks, milestones, activity
     masteryService.ts        # Per-concept mastery tiers + weak-area recommendations
     reviewPlanner.ts         # Targeted review: rank concepts by weakness + recency
     learnerInsights.ts       # Per-concept insight + session miss tally for the tutor
-    aiTutor.ts               # Optional OpenAI concept tutor; POSTs to the Worker proxy
+    aiTutor.ts               # Optional tutor transport (per-step + roadmap chat) → Worker proxy
+    answerFormat.ts          # Describe an answer as text (shared by the tutor + "Solve it")
+    solutionService.ts       # "Solve it" answer seeds + worked-solution blocks
+    sandbox.ts               # Resolve concept-sandbox presets → explorer configs
+    sound.ts                 # Web Audio sound engine + per-user preference
     inlineMarkup.ts          # Normalize/tokenize inline text + math for rendering
     referenceService.ts      # Load/validate + level-gate the reference cheat sheet
     validateLesson.ts        # Lesson-schema validation
     validateReference.ts     # Reference cheat-sheet validation
-    *.test.ts                # Unit tests for the above
+    lessonStatus.ts          # Shared "is this lesson finished?" predicate
+    stepHelpers.ts           # Runtime step helpers (multi-part, Riemann demo, …)
+    constants.ts             # Tuning constants (steps, XP, sessions, test-out, mastery)
+    milestones.ts            # Milestone defs/sections/order + progress computation
+    shuffle.ts               # Shared shuffle helper
+    reducedMotion.ts         # prefers-reduced-motion helper
+    *.test.ts                # Unit tests (scoped to src/lib/**)
 
-  contexts/
-    AuthContext.tsx          # Auth hook/types (provided by AuthProvider.tsx)
-    AuthProvider.tsx         # login/signup/google/demo + account management
-    ProgressContext.tsx      # Progress hook/types (provided by ProgressProvider.tsx)
-    ProgressProvider.tsx     # Profile + progress + XP + activity + completion
-    SessionInsightsContext.ts   # Session-insights hook (provided by the Provider)
-    SessionInsightsProvider.tsx # Tracks per-concept misses this session (tutor)
+  contexts/                  # Context + Provider pairs:
+    Auth                     #   login/signup/google/demo + account management
+    Progress                 #   profile + progress + XP/milestones + activity + completion
+    SessionInsights          #   per-concept misses this session (tutor personalization)
+    Sound                    #   sound engine wiring + global audio cues
 
   hooks/
+    useQuizSession.ts        # Shared practice/review/test-out session state machine
     useSessionExitGuard.ts   # Confirm before leaving an unfinished session
+    useActionLock.ts         # Debounce/lock rapid repeated actions
+    useAssistancePreference.ts # Sticky solve/hints/none preference
+    useSoundPreference.ts    # Sticky sound on/off preference
     useCountUp.ts            # Animated number roll-up (honors reduced motion)
 
   components/
     auth/        ProtectedRoute, PasswordInput
     common/      Icon, icons (lucide registry), ConfirmDialog
     layout/      AppHeader (incl. Reference button), UserMenu, SafeArea
-    lesson/      LessonPlayer, FeedbackPanel, StepNavBar,
-                 LessonComplete, PracticeResults, TutorPanel
-    widgets/     GraphWidget, MathBlock, AnswerInput, MultiChoiceInput,
-                 DragDropInput, MatchInput, SignChartInput, OrderListInput,
-                 RiemannInput
+    lesson/      LessonPlayer, SessionRunner, FeedbackPanel, StepNavBar,
+                 AssistanceToggle, SolutionPanel, ConceptSandbox, LockedPart,
+                 LessonComplete, PracticeResults, TestOutResults, TutorPanel,
+                 PowerRule/PolynomialSolve/RiemannRefine/FtcEvaluate animations,
+                 PowerRule/ReversePowerRule explorers
+    widgets/     GraphWidget, MathBlock, AnswerInput, plotGeometry,
+                 MultipleChoiceInput, MultiChoiceInput, DragDropInput, MatchInput,
+                 SignChartInput, OrderListInput, RiemannInput, ConstructGraphInput,
+                 PaintIntervalsInput, SelectRegionInput, TangentLineInput,
+                 IntegralBoundsInput, SimulateInput
+    tutor/       RoadmapTutorFab, TutorChatModal, TutorText
     reference/   ReferenceModal (popup cheat sheet), ReferenceCard
     roadmap/     LevelSection, LessonCard
     habit/       StreakBadge, XpBadge, Sparkles, FireFX, ElectricityFX
@@ -312,38 +363,43 @@ src/
   pages/
     LandingPage, LoginPage, SignupPage, RoadmapPage,
     LessonPage, PracticePage, ReviewPage, CustomPracticePage,
-    LevelReviewPage, ProfilePage, SettingsPage
+    LevelReviewPage, TestOutPage, ProfilePage, SettingsPage
 
-tutor-proxy/                 # Cloudflare Worker proxy for the AI tutor (active):
-                             #   holds the OpenAI key, verifies the Firebase ID token
-functions/                   # Equivalent Firebase Cloud Functions tutor proxy
-                             #   (alternative for teams already on the Blaze plan)
-firebase.json                # Hosting + Firestore + Functions + Auth config
+tutor-proxy/                 # Cloudflare Worker proxy for the AI tutor: holds the
+                             #   OpenAI key, verifies the Firebase ID token, rate-limits
+firebase.json                # Hosting (SPA rewrite + CSP/security headers) + Firestore + Auth
 firestore.rules              # Per-user access rules + server-only AI tutor counters/config
 firestore.indexes.json
-vite.config.ts               # Vite + Tailwind + Vitest config
+SECURITY.md                  # Security review: findings, fixes, accepted risks
+vite.config.ts               # Vite + Tailwind + Vitest (+ manualChunks code-splitting)
 ```
 
 ### Provider nesting
 
 ```text
-AuthProvider → ProgressProvider → SessionInsightsProvider → RouterProvider → Routes
+AuthProvider → ProgressProvider → SessionInsightsProvider → SoundProvider → RouterProvider → Routes
 ```
 
 `AuthContext` resolves *who* the user is; `ProgressContext` then loads that
 user's profile and all lesson progress before the router renders pages.
 `SessionInsightsContext` tracks the concepts missed in the current study session
-(used to personalize the tutor). A data router (`createBrowserRouter` +
-`RouterProvider`) is used so route components can guard navigation away from an
-unfinished session.
+(used to personalize the tutor), and `SoundContext` wires the audio engine.
+A data router (`createBrowserRouter` + `RouterProvider`) is used so route
+components can guard navigation away from an unfinished session. Each page is
+**code-split** with `React.lazy`, so heavy dependencies (math.js, KaTeX, the
+lesson player) load only when first needed; the providers stay above
+`RouterProvider` so route elements still see their context.
 
 ---
 
 ## 5. Data model
 
-All domain types live in `src/types/content.ts`. The core hierarchy is
-**Course → Level → Lesson → Step → Interaction (graph + answer + feedback)**,
-alongside a separate hand-authored **Reference** deck (`ReferenceFact[]`).
+All domain types live in `src/types/content.ts` (pure types only — the tuning
+constants, milestone catalog, and runtime step helpers were split out into
+`lib/constants.ts`, `lib/milestones.ts`, and `lib/stepHelpers.ts`). The core
+hierarchy is **Course → Level → Lesson → Step → Interaction (graph + answer +
+feedback)**, alongside a separate hand-authored **Reference** deck
+(`ReferenceFact[]`).
 
 ```ts
 // A course groups lessons into ordered levels.
@@ -373,15 +429,20 @@ interface Step {
   id: string;
   type: "read" | "multiple_choice" | "multi_choice" | "numeric"
       | "slider_graph" | "power_term" | "drag_drop" | "match"
-      | "sign_chart" | "order_list" | "riemann" | "predict";
+      | "sign_chart" | "order_list" | "riemann" | "predict"
+      | "construct_graph" | "paint_intervals" | "tangent_line"
+      | "integral_bounds" | "simulate" | "select_region";
   conceptTag?: string;
   content: ContentBlock[];          // text or math (LaTeX) blocks
-  interaction?: Interaction;        // graph config + answer spec + hint timing
-                                    //   + optional liveCheck / goalLabel
+  interaction?: Interaction;        // graph + answer + sandbox + liveCheck / goalLabel
+  solution?: ContentBlock[];        // worked solution for the "Solve it" level (graded lesson steps)
+  solveAnimation?: SolveAnimation;  // optional problem-specific "Solve it" walkthrough
+  montage?: PowerRuleTerm[];        // looping power-rule recap shown on a read step
+  parts?: StepPart[];               // optional follow-up parts (one multi-part question)
   feedback: { correct: string; incorrect: string; hint: string };
 }
 
-// Twelve answer shapes, each graded by the feedback engine.
+// Eighteen answer shapes, each graded by the feedback engine.
 type AnswerSpec =
   | { type: "multiple_choice"; options: string[]; correctIndex: number }
   | { type: "multi_choice"; options?: string[]; parts: MultiChoicePart[] }
@@ -390,8 +451,8 @@ type AnswerSpec =
   | { type: "graph_point"; x: number; tolerance?: number }
   | { type: "predict_point"; x: number; acceptX?: number[]; tolerance?: number;
       reveal: { point?: boolean; tangent?: boolean; vertical?: boolean } }
-  | { type: "power_term"; coefficient: number; exponent: number;
-      startCoefficient?: number; startExponent?: number; previewPrefix?: string }
+  | { type: "power_term"; coefficient: number; exponent: number; denominator?: number;
+      startCoefficient?: number; startExponent?: number; previewPrefix?: string; plusC?: boolean }
   | { type: "drag_drop"; prefix?: string; blanks: DragDropBlank[]; bank: string[] }
   | { type: "match"; pairs: MatchPair[]; distractors?: string[] }
   | { type: "sign_chart"; points: number[]; options: string[];
@@ -399,7 +460,23 @@ type AnswerSpec =
   | { type: "order_list"; items: string[]; orderLabel?: string }
   | { type: "riemann"; fn: string; a: number; b: number; trueArea: number;
       targetWithin: number; maxRects?: number; demo?: boolean;  // demo: ungraded
-      domain?: [number, number]; yMax?: number };
+      domain?: [number, number]; yMax?: number }
+  | { type: "construct_graph"; domain: [number, number]; yDomain: [number, number];
+      nodes: ConstructGraphNode[]; targetFn?: string; targetY?: number[] }  // build a curve
+  | { type: "paint_intervals"; fn: string; domain: [number, number];
+      breakpoints: number[]; correct: boolean[] }                          // brush segments on/off
+  | { type: "select_region"; fn: string; domain: [number, number];
+      bands: SelectRegionBand[]; multi?: boolean }                         // tap region(s)
+  | { type: "tangent_line"; fn: string; domain: [number, number];
+      x0: number; slope: number; tolerance?: number }                      // rotate to the slope
+  | { type: "integral_bounds"; fn: string; domain: [number, number];
+      a: number; b: number; tolerance?: number }                          // drag the limits a, b
+  | { type: "simulate"; control: "velocity"; match: "control" | "integral" | "derivative";
+      target: string; duration: number; yDomain: [number, number]; coverage?: number };
+
+// An Interaction may also carry an ungraded `sandbox` (a hints-only explorer on a
+// DIFFERENT example) and, on a step, optional follow-up `parts` (StepPart[]) that
+// chain into a single multi-part question.
 ```
 
 The **Reference** cheat sheet is a separate hand-authored deck, grouped for
@@ -427,8 +504,9 @@ interface UserProfile {
   streak: { count: number; lastActiveDate: string };
   milestones: string[];
   xp: number;
-  practiceQuestionsAnswered: number;    // first-try practice/review answers → achievements
-  activityLog?: Record<string, number>; // questions answered per ISO day → heatmap
+  practiceQuestionsAnswered: number;     // first-try practice/review answers → achievements
+  activityLog?: Record<string, number>;  // questions answered per ISO day → heatmap
+  conceptStats?: Record<string, ConceptStat>; // lifetime practice/review accuracy per concept → mastery
   createdAt: string;
   updatedAt: string;
 }
@@ -438,12 +516,13 @@ interface LessonProgress {
   currentStepIndex: number;
   stepAttempts: Record<string, number>;   // per-step attempt counts
   stepAnswers: Record<string, unknown>;    // last submitted answer per step
+  solvedSteps?: string[];                  // steps cleared via "Solve it" (excluded from mastery)
   completedAt: string | null;
   updatedAt: string;
 }
 ```
 
-Tuning constants (also in `content.ts`):
+Tuning constants (in `lib/constants.ts`):
 
 | Constant | Value | Meaning |
 |----------|------:|---------|
@@ -452,11 +531,16 @@ Tuning constants (also in `content.ts`):
 | `MIN_MATCH_PAIRS` | 2 | Minimum pairs in a match question |
 | `XP_PER_LESSON` | 50 | XP for first completion of a lesson |
 | `XP_PER_PRACTICE_CORRECT` | 10 | XP per first-try-correct practice answer |
+| `XP_PER_MULTIPART_BONUS` | 5 | Bonus XP for a multi-part question |
 | `PRACTICE_SESSION_SIZE` | 3 | Questions per practice session |
 | `REVIEW_SESSION_SIZE` | 5 | Questions per targeted-review session |
 | `CUSTOM_PRACTICE_DEFAULT_SIZE` / `CUSTOM_PRACTICE_MAX_SIZE` | 5 / 20 | Default & max questions in a custom practice set |
+| `TEST_OUT_PASS_RATIO` | 0.8 | First-try accuracy needed to test out of a level |
+| `TEST_OUT_PER_CONCEPT` / `TEST_OUT_PER_LESSON` | 2 / 3 | Questions drawn per concept / per bypassed lesson |
+| `TEST_OUT_MIN_QUESTIONS` | 3 | Fewest questions a test-out must offer |
 | `PRACTICE_BANK_MIN` | 3 | Minimum questions in a practice bank |
 | `MASTERY_PROFICIENT` / `MASTERY_MASTERED` | 0.6 / 0.9 | First-try accuracy for concept tiers |
+| `DEFAULT_ASSISTANCE_LEVEL` | `"hints"` | Assistance toggle a new learner starts on |
 
 ---
 
@@ -509,10 +593,13 @@ When the last step is cleared, `LessonPage` calls `completeLesson()`, which:
 4. Returns the XP gained; if > 0, a celebration screen shows. The next lesson is
    now unlocked on the roadmap.
 
-### Practice & review sessions
+### Practice, review & test-out sessions
 
-Practice and review reuse the same `LessonPlayer` in **practice mode** against a
-*synthetic* lesson whose steps are a freshly sampled set of questions:
+Practice, review, and test-out all run the same `LessonPlayer` in **practice
+mode** against a *synthetic* lesson whose steps are a freshly sampled set of
+questions. The five session pages share one state machine — `useQuizSession`
+(sample → synthetic lesson → exit guard → results/retry) wrapped by the
+`SessionRunner` shell — and differ only in how they pick questions:
 
 - **Per-lesson practice** (`/lesson/:id/practice`) samples `getPracticeSession()`
   from that lesson's bank.
@@ -524,10 +611,16 @@ Practice and review reuse the same `LessonPlayer` in **practice mode** against a
 - **Custom practice** (`/practice/custom`) lets the learner pick the concepts and
   question count, then samples `getCustomPracticeSession()`.
 - **Level review** (`/level/:id/review`) samples across all lessons in a level.
+- **Test out** (`/level/:id/test-out`) draws a mixed challenge from the lessons up
+  to a target level (`getLevelTestOutSession()`); passing at ≥ `TEST_OUT_PASS_RATIO`
+  first-try accuracy marks the bypassed lessons complete and unlocks the level.
 
-In practice mode, progress is **not** persisted (so it can't disturb real lesson
-state), only first-try-correct answers count toward the score, and results award
-practice XP. Each retry re-samples the bank, so repeated practice stays varied.
+In these modes, **lesson** progress is not persisted (so it can't disturb real
+lesson state) and only first-try-correct answers count toward the score and award
+practice XP — but each session's first-try results per concept *are* folded into
+the learner's lifetime `conceptStats`, so practicing well lifts mastery and
+practicing poorly lets it slip. Each retry re-samples the bank, so repeated
+practice stays varied.
 
 ### Resume mid-lesson
 
@@ -576,6 +669,13 @@ The slope/derivative math behind it lives in `feedbackEngine.ts`:
   `RiemannInput` widget's rectangles and the grading of `riemann` steps, so the
   picture and the verdict always agree.
 
+Several newer question types render their **own dedicated SVG widget** rather than
+reusing `GraphWidget` — `ConstructGraphInput`, `PaintIntervalsInput`,
+`SelectRegionInput`, `TangentLineInput`, `IntegralBoundsInput`, `SimulateInput`,
+and `RiemannInput` — each drawing its own axes and gesture while sharing the same
+plot math (`plotGeometry.ts`, `feedbackEngine`); that's why those steps must not
+also declare a `graph` config.
+
 ---
 
 ## 8. Grading & feedback
@@ -596,6 +696,12 @@ function that returns a `FeedbackResult`. Grading per answer type:
 | `sign_chart` | Every interval's chosen label must match its `correctIndex` (graded by position) |
 | `order_list` | The submitted ordering must exactly equal the authored order |
 | `riemann` | The midpoint Riemann sum for the chosen `n` must land within `targetWithin` of `trueArea` |
+| `construct_graph` | Every node's y within tolerance of its target (`targetFn(x)` or `targetY`) |
+| `paint_intervals` | The painted on/off pattern must exactly equal `correct` |
+| `select_region` | The tapped band (single) or the on/off set (multi) must match the `correct` bands |
+| `tangent_line` | `abs(slope − spec.slope) ≤ tolerance` (default 0.3) after rotating about the pivot |
+| `integral_bounds` | Both limits within tolerance of `a`/`b` (graded sorted, so handles can be dragged in either order) |
+| `simulate` | The driven trace (or its running integral/derivative) lands within `tolerance` of `target` on ≥ `coverage` of samples |
 
 A `riemann` step can also be authored as an ungraded **demo** (`demo: true`,
 detected by `isRiemannDemo`): the learner still drags to watch the estimate
@@ -632,14 +738,13 @@ mastery tier and first-try accuracy, how long since it was last practiced, and
 the concepts missed earlier in this session (tracked by `SessionInsightsContext`
 and recorded as each answer is graded). The model's loosely-formatted output is
 normalized for the KaTeX renderer by `inlineMarkup.ts` (folding `\(…\)`/`$$…$$`
-into `$…$`, handling Markdown emphasis). Follow-ups are capped per step
-(`MAX_FOLLOWUPS`), and the panel is hidden entirely (`isAiAvailable`) unless the
-tutor proxy URL (`VITE_TUTOR_PROXY_URL`) is configured — so the zero-config demo
-and offline use are unchanged.
-
-> The repo also ships an equivalent **Firebase Cloud Functions** implementation
-> of the same proxy in `functions/` (an alternative for teams already on the
-> Blaze plan); the deployed app talks to the Cloudflare Worker.
+into `$…$`, handling Markdown emphasis). A free-form **tutor chat** is also
+available from the roadmap (`RoadmapTutorFab` → `TutorChatModal`, seeded by
+`createGeneralTutorChat`) for general questions; per-step follow-ups are capped
+(`MAX_FOLLOWUPS`) and the per-step explainer and the roadmap chat share one
+server-enforced per-user rate limit. The tutor is hidden entirely
+(`isAiAvailable`) unless the tutor proxy URL (`VITE_TUTOR_PROXY_URL`) is
+configured — so the zero-config demo and offline use are unchanged.
 
 ---
 
@@ -684,8 +789,10 @@ first try (tracked on `UserProfile.practiceQuestionsAnswered`, incremented by
 `addXp` with the session's first-try count); lesson-walkthrough questions and
 questions that needed more than one attempt do not count.
 
-In the profile UI, achievements are grouped into sections (`MILESTONE_SECTIONS`)
-and `MILESTONE_ORDER` is derived from that grouping:
+The milestone catalog (`MILESTONE_DEFS`), its display grouping
+(`MILESTONE_SECTIONS` → `MILESTONE_ORDER`), and the pure `milestoneProgress`
+computation all live in `lib/milestones.ts`, so the award logic and the
+achievements UI read from one source. The achievements, by section:
 
 | Section | ID | Title | Earned when |
 |---------|----|-------|-------------|
@@ -706,18 +813,26 @@ and `MILESTONE_ORDER` is derived from that grouping:
 
 - **+50** the first time each lesson is completed.
 - **+10** per question answered correctly on the first try in practice/review.
+- **+5** bonus per multi-part question cleared (per multi-part step on a lesson's
+  first completion; per multi-part question cleared first-try in practice).
 - Replaying or reviewing finished material earns no XP. The running total shows in
   the header (`XpBadge`) and the roadmap.
 
 ### Concept mastery & profile
 
 `masteryService.ts` rolls every answerable lesson step up by its `conceptTag` into a
-**concept catalog**, then scores each concept from saved progress:
+**concept catalog**, then scores each concept by blending saved lesson progress with the
+learner's lifetime practice/review performance (`UserProfile.conceptStats`):
 
 - A question is **cleared** when its lesson is complete (or the saved step pointer has moved
-  past it), and **first-try** when it was cleared in a single attempt.
-- Each concept gets a **tier**: `not_started` → `learning` → `proficient` (fully cleared, ≥ 60%
-  first-try) → `mastered` (fully cleared, ≥ 90% first-try).
+  past it), and **first-try** when it was cleared in a single attempt. Steps cleared via the
+  "Solve it" walkthrough (`solvedSteps`) are excluded, so seeing the answer never inflates accuracy.
+- The lesson's first-try accuracy is **capped at about the halfway mark**, then practice/review
+  results carry the rest of the way — so reaching the top band takes real practice (and a shaky
+  lesson can still be carried up by practicing). Unpracticed mastery also **decays** toward a
+  floor after roughly two weeks untouched, so it has to be maintained.
+- Each concept gets a **tier**: `not_started` → `learning` → `proficient` (≥ 60% blended) →
+  `mastered` (≥ 90% blended).
 - `getWeakConcepts()` returns the weakest started-but-unmastered concepts, each linked to the
   best place to practice it.
 
@@ -773,9 +888,9 @@ match /config/{docId}  { allow read, write: if false; }
 ```
 
 A **Settings** page (`/settings`) lets signed-in users manage their account: change the
-display name, update email/password (for password accounts), and permanently delete the
-account (with re-authentication). Google accounts manage email/password through Google, and
-demo-mode changes are saved locally only.
+display name, update email/password (for password accounts), toggle sound effects, and
+permanently delete the account (with re-authentication). Google accounts manage
+email/password through Google, and demo-mode changes are saved locally only.
 
 A demo-only **DevTools** panel (visible only under the dev bypass) can complete or
 reset all progress for quick testing of locks and milestones.
@@ -811,6 +926,19 @@ sheet (`content/reference.json`) is validated the same way (`validateReference.t
   `targetWithin`, and no separate graph config (the widget draws its own).
 - `predict_point` questions need a graph config, a finite `x` (and finite
   `acceptX`), a positive `tolerance` when set, and a `reveal` spec.
+- `construct_graph` needs ≥ 2 fixed-x nodes and exactly one target source
+  (`targetFn` *or* `targetY`); `paint_intervals` needs strictly-increasing
+  in-domain breakpoints with one more `correct` entry than breakpoints.
+- `select_region` needs ≥ 2 ordered, non-overlapping in-domain bands with exactly
+  one correct band (single-select) or ≥ 1 (multi); `tangent_line` checks the
+  authored `slope` against `f'(x0)`; `integral_bounds` needs `b > a` in the domain.
+- `simulate` needs a positive `duration`, a `coverage` in (0, 1], and a `target`
+  (plus any `referenceFn`) that evaluates. The six self-drawing widgets must not
+  also declare a separate graph config.
+- An optional `sandbox` needs exactly one source (`preset` or `graph`); a
+  curve-based sandbox's `fn` must evaluate and must **differ** from the graded curve.
+- Multi-part `parts` are allowed only on graded steps; each needs a unique id, its
+  own answer + feedback, and is checked with the same per-type rules.
 - Non-read steps must have all three feedback fields (correct/incorrect/hint).
 - Graded **lesson** steps must include a `solution` (worked-solution blocks)
   powering the "Solve it" assistance level; practice questions are exempt.
@@ -871,11 +999,14 @@ or **No help** (no proactive hints or sandbox; a missed answer shows only a brie
 preference (`useAssistancePreference.ts`, default Hints); practice questions offer
 only Hints / No help.
 
-A graph step may carry an optional `solveAnimation` recipe (e.g.
-`{ "kind": "secant", "a": 1, "b": 3 }`) that the "Solve it" walkthrough plays
-instead of the generic slider sweep — the secant recipe draws a "rate of change
-between two points" demo. The live x / f(x) readouts are hidden during any
-walkthrough so values don't flash.
+A step may carry an optional `solveAnimation` recipe that the "Solve it"
+walkthrough plays instead of the generic slider sweep. Its `kind` can be `secant`
+(rate of change between two points), `narrated` (captioned phases that drive the
+slider), `power_rule` / `polynomial` / `antiderivative` (term-by-term
+differentiation/integration drops), `riemann_refine` (rectangles multiplying as
+the estimate converges), or `ftc_evaluate` (build F, then compute F(b) − F(a)). A
+`read` step can also loop a `montage` of power-rule drops as a recap. The live
+x / f(x) readouts are hidden during any walkthrough so values don't flash.
 
 ---
 
@@ -892,6 +1023,7 @@ walkthrough so values don't flash.
 | `/review` | `ReviewPage` — cross-lesson **targeted** review | Yes |
 | `/practice/custom` | `CustomPracticePage` — pick concepts + session size | Yes |
 | `/level/:levelId/review` | `LevelReviewPage` | Yes |
+| `/level/:levelId/test-out` | `TestOutPage` — skip-ahead challenge | Yes |
 | `/profile` | `ProfilePage` — stats, activity heatmap, concept mastery | Yes |
 | `/settings` | `SettingsPage` — account management | Yes |
 
@@ -949,9 +1081,12 @@ Available scripts:
 ## 14. Deployment
 
 The app deploys as static files to **Firebase Hosting** with an SPA rewrite
-(everything routes to `index.html`). Firestore rules are deployed alongside it.
-Configuration lives in `firebase.json` (site `calculus-lab`, public dir `dist`); the
-active project is set in `.firebaserc`. The app is live at
+(everything routes to `index.html`) and a set of **security response headers** — a
+strict Content-Security-Policy plus `X-Frame-Options`, `X-Content-Type-Options`,
+`Referrer-Policy`, `Permissions-Policy`, and HSTS (all in `firebase.json`; see
+[`SECURITY.md`](./SECURITY.md) for the full review). Firestore rules are deployed
+alongside it. Configuration lives in `firebase.json` (site `calculus-lab`, public
+dir `dist`); the active project is set in `.firebaserc`. The app is live at
 **https://calculus-lab.web.app**. The optional AI tutor proxy deploys separately
 to Cloudflare (see [`tutor-proxy/README.md`](./tutor-proxy/README.md)).
 
@@ -987,6 +1122,7 @@ coverage scoped to `src/lib/**`:
 | `inlineMarkup.test.ts` | Inline math/markdown normalization + tokenizing |
 | `referenceService.test.ts` | Reference grouping + level-gated unlocking |
 | `validateLesson.test.ts` | Lesson-schema validation rules |
+| `solutionService.test.ts` | "Solve it" answer seeds + worked-solution blocks |
 
 ```bash
 npm run test            # run all
@@ -1017,6 +1153,11 @@ mode.
 user, one profile, one progress map — so Context with optimistic updates is
 enough.
 
+**Why per-route code-splitting?** The lesson player pulls in math.js + KaTeX
+(hundreds of kB); lazy-loading each page (`React.lazy` + `manualChunks`) keeps the
+initial download small, so the landing and auth pages load fast and the heavy
+dependencies arrive only when a lesson or practice session is opened.
+
 **Scope note — AI is optional and never grades.** Every problem, hint, and
 answer key is hand-authored, and all grading is deterministic (math.js, used for
 answer-checking, not generation), so the app teaches fully on its own with no AI.
@@ -1026,8 +1167,9 @@ the correct answer and only explains; it never grades or generates problems, and
 it stays hidden unless the tutor proxy URL (`VITE_TUTOR_PROXY_URL`) is configured.
 Keeping the OpenAI key on the Worker lets the app deploy publicly on Firebase's
 free Spark plan (no Cloud Functions / Blaze required). The learning-science layer
-(practice, targeted/interleaved review, custom practice, sequential mastery,
-XP/streaks) is implemented.
+(faded-guidance assistance toggle, per-lesson practice, targeted/interleaved
+review, custom practice, sequential mastery with a test-out path, XP/streaks) is
+implemented.
 
 **Mastery model.** Per-concept mastery (`learning` / `proficient` / `mastered`) is computed
 from saved progress and shown on the profile. Lesson *status* itself still only reaches
