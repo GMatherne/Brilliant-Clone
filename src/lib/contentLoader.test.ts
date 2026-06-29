@@ -16,7 +16,7 @@ import {
   getCustomPracticeSession,
   shuffle,
   getLessonStepCount,
-  getLevelTestOutSession,
+  getTestOutSessionForLessons,
   getLevelTestOutLessonIds,
   canTestOutLevel,
 } from "./contentLoader";
@@ -272,9 +272,16 @@ describe("shuffle", () => {
   });
 });
 
-describe("getLevelTestOutSession", () => {
+describe("level skip-ahead test-out (getTestOutSessionForLessons of getLevelTestOutLessonIds)", () => {
   const levels = getLevels();
   const noProgress: Record<string, { status: string }> = {};
+
+  // The composition TestOutPage performs: draw a per-lesson quota across the
+  // unfinished lessons a skip-ahead at this level would bypass.
+  const levelTestOut = (
+    levelId: string,
+    progress: Record<string, { status: string }>,
+  ) => getTestOutSessionForLessons(getLevelTestOutLessonIds(levelId, progress));
 
   // Lessons from the start of the course through a level, inclusive.
   const lessonsUpTo = (i: number) =>
@@ -290,7 +297,7 @@ describe("getLevelTestOutSession", () => {
     const uniqueIds = new Set(
       span.flatMap((l) => getPracticeBank(l.id)).map((s) => s.id),
     );
-    const session = getLevelTestOutSession(levels[idx].id, noProgress);
+    const session = levelTestOut(levels[idx].id, noProgress);
 
     expect(new Set(session.map((s) => s.id)).size).toBe(session.length);
     expect(session.every((s) => uniqueIds.has(s.id))).toBe(true);
@@ -302,7 +309,7 @@ describe("getLevelTestOutSession", () => {
   it("pulls the quota from every lesson in the span, earlier levels included", () => {
     const idx = levels.length - 1;
     const span = lessonsUpTo(idx);
-    const session = getLevelTestOutSession(levels[idx].id, noProgress);
+    const session = levelTestOut(levels[idx].id, noProgress);
 
     for (const lesson of span) {
       const bankIds = new Set(getPracticeBank(lesson.id).map((s) => s.id));
@@ -324,7 +331,7 @@ describe("getLevelTestOutSession", () => {
       finished.flatMap((l) => getPracticeBank(l.id)).map((s) => s.id),
     );
 
-    const session = getLevelTestOutSession(levels[idx].id, progress);
+    const session = levelTestOut(levels[idx].id, progress);
     expect(session.length).toBeGreaterThan(0);
     expect(session.some((s) => finishedIds.has(s.id))).toBe(false);
     // Exactly the quota from each still-unfinished lesson, and nothing more.
@@ -336,7 +343,7 @@ describe("getLevelTestOutSession", () => {
 
   it("grows the more lessons it bypasses", () => {
     const lengths = levels.map(
-      (l) => getLevelTestOutSession(l.id, noProgress).length,
+      (l) => levelTestOut(l.id, noProgress).length,
     );
     for (let i = 1; i < lengths.length; i++) {
       expect(lengths[i]).toBeGreaterThan(lengths[i - 1]);
@@ -344,7 +351,7 @@ describe("getLevelTestOutSession", () => {
   });
 
   it("returns nothing for an unknown level", () => {
-    expect(getLevelTestOutSession("does-not-exist", noProgress)).toEqual([]);
+    expect(levelTestOut("does-not-exist", noProgress)).toEqual([]);
   });
 
   it("returns nothing once every lesson in the span is finished", () => {
@@ -353,7 +360,7 @@ describe("getLevelTestOutSession", () => {
     lessonsUpTo(idx).forEach((l) => {
       progress[l.id] = { status: "complete" };
     });
-    expect(getLevelTestOutSession(levels[idx].id, progress)).toEqual([]);
+    expect(levelTestOut(levels[idx].id, progress)).toEqual([]);
   });
 });
 
